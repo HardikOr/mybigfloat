@@ -1,4 +1,5 @@
 import java.util.Arrays;
+import java.util.Objects;
 
 import static java.lang.Math.*;
 
@@ -9,64 +10,76 @@ public class MyBigFloat {
     private int intlen;
     private int declen;
 
-    private int positive;
+    private int sign;
 
     public MyBigFloat(int number) {
-        this.positive = number >= 0 ? 1 : -1;
-        this.declen = 1;
-        this.decimal = new int[]{0};
-
-        int n = abs(number);
-        this.intlen = n == 0 ? 1 : (int) (log10(n) + 1);
-        this.integer = new int[this.intlen];
-        for (int i = 0; i < this.intlen; i++) {
-            this.integer[this.intlen - i - 1] = n % 10;
-            n /= 10;
-        }
+        this(new MyBigFloat(Integer.toString(number)));
     }
 
     public MyBigFloat(float number) {
-        this.positive = number >= 0 ? 1 : -1;
-
-        String[] str = Float.toString(abs(number)).split("[.]");
-        this.intlen = str[0].length();
-        this.declen = str[1].length();
-
-        this.integer = new int[this.intlen];
-        this.decimal = new int[this.declen];
-
-        int pos = 0;
-        for (char i : str[0].toCharArray()) {
-            this.integer[pos++] = i - '0';
-        }
-
-        pos = 0;
-        for (char i : str[1].toCharArray()) {
-            this.decimal[pos++] = i - '0';
-        }
+        this(new MyBigFloat(Float.toString(number)));
     }
 
     public MyBigFloat(String string) {
-        String s;
-        if (string.contains("-")) {
-            this.positive = -1;
-            s = string.replace("-", "");
+        if (string == null || string.isEmpty()) throw new IllegalArgumentException("String is null || empty");
+        if (!string.matches("[-]?[\\d]+[.]?[\\d]*[E]?[-]?[\\d]*")) throw new NumberFormatException("Illegal symbols");
+
+        String[] str;
+        int add = 0;
+
+        if (string.contains("E")) {
+            str = string.split("[E]");
+            str[0] = str[0].replace(".", "");
+            add = Integer.parseInt(str[1]);
         } else {
-            this.positive = 1;
-            s = string;
+            if (string.contains(".")) {
+                str = string.split("[.]");
+            } else {
+                str = new String[2];
+                str[0] = string;
+                str[1] = "0";
+            }
         }
 
-        String[] str = s.split("[.]");
-
-        this.intlen = str[0].length();
-        this.integer = new int[this.intlen];
-
-        int pos = 0;
-        for (char i : str[0].toCharArray()) {
-            this.integer[pos++] = i - '0';
+        if (str[0].contains("-")) {
+            this.sign = -1;
+            str[0] = str[0].replace("-", "");
+        } else {
+            this.sign = 1;
         }
 
-        if (str.length > 1) {
+        if (add > 0) {
+            this.intlen = add + 1;
+            this.integer = new int[this.intlen];
+            this.declen = 1;
+            this.decimal = new int[this.declen];
+
+            int pos = 0;
+            for (char i : str[0].toCharArray()) {
+                this.integer[pos++] = i - '0';
+            }
+        } else if (add < 0) {
+            this.intlen = 1;
+            this.integer = new int[this.intlen];
+            this.declen = str[0].length() - 1 - add;
+            this.decimal = new int[this.declen];
+
+            System.out.println(intlen);
+            System.out.println(declen);
+
+            int pos = 0;
+            for (char i : str[0].toCharArray()) {
+                this.decimal[this.declen - str[0].length() + pos++] = i - '0';
+            }
+        } else {
+            this.intlen = str[0].length();
+            this.integer = new int[this.intlen];
+
+            int pos = 0;
+            for (char i : str[0].toCharArray()) {
+                this.integer[pos++] = i - '0';
+            }
+
             this.declen = str[1].length();
             this.decimal = new int[this.declen];
 
@@ -74,14 +87,11 @@ public class MyBigFloat {
             for (char i : str[1].toCharArray()) {
                 this.decimal[pos++] = i - '0';
             }
-        } else {
-            this.declen = 1;
-            this.decimal = new int[]{0};
         }
     }
 
-    private MyBigFloat revert() {
-        this.positive = 0 - this.positive;
+    private MyBigFloat inverse() {
+        this.sign = -this.sign;
         return this;
     }
 
@@ -112,41 +122,44 @@ public class MyBigFloat {
             System.arraycopy(decimal, 0, this.decimal, 0, this.declen);
         }
 
-        this.positive = positive;
+        this.sign = positive;
+    }
+
+    private MyBigFloat(MyBigFloat other) {
+        this.integer = other.integer;
+        this.decimal = other.decimal;
+        this.intlen = other.intlen;
+        this.declen = other.declen;
+        this.sign = other.sign;
     }
 
     public MyBigFloat plus(MyBigFloat other) {
-        if (this.positive == -1) {
-            if (other.positive == 1)
-                return other.minus(this.revert());
+        if (this.sign == -1) {
+            if (other.sign == 1)
+                return other.minus(this.inverse());
             else
-                return other.revert().plus(other.revert()).revert();
+                return other.inverse().plus(other.inverse()).inverse();
         } else {
-            if (other.positive == -1)
-                return this.minus(other.revert());
+            if (other.sign == -1)
+                return this.minus(other.inverse());
         }
 
         int len1 = max(this.declen, other.declen);
-//        System.out.println("lendec: " + len1);
         int[] deci = new int[len1];
 
         int add = 0;
         int num;
         for (int i = len1 - 1; i >= 0; i--) {
             num = add + (i < this.declen ? this.decimal[i] : 0) + (i < other.declen ? other.decimal[i] : 0);
-//            System.out.println("n: " + num);
             add = num > 9 ? 1 : 0;
             deci[i] = num % 10;
         }
 
         int len2 = max(this.intlen, other.intlen) + 1;
-//        System.out.println("lenint: " + len2);
         int[] inte = new int[len2];
 
-//        System.out.println("add: " + add);
         for (int i = 0; i < len2; i++) {
             num = add + (this.intlen - i > 0 ? this.integer[this.intlen - i - 1] : 0) + (other.intlen - i > 0 ? other.integer[other.intlen - i - 1] : 0);
-            System.out.println("n: " + num);
             add = num > 9 ? 1 : 0;
             inte[len2 - i - 1] = num % 10;
         }
@@ -155,44 +168,53 @@ public class MyBigFloat {
     }
 
     public static int compare(MyBigFloat a, MyBigFloat b) {
+        if (a.sign == 1 && b.sign == -1)
+            return a.sign;
+        if (a.sign == -1 && b.sign == 1)
+            return a.sign;
+
         if (a.intlen > b.intlen)
-            return 1;
+            return a.sign;
         else if (a.intlen < b.intlen)
-            return -1;
+            return -a.sign;
 
         for (int i = 0; i < a.intlen; i++) {
             if (a.integer[i] > b.integer[i])
-                return 1;
+                return a.sign;
             else if (a.integer[i] < b.integer[i])
-                return -1;
+                return -a.sign;
         }
 
         for (int i = 0; i < min(a.declen, b.declen); i++) {
             if (a.decimal[i] > b.decimal[i])
-                return 1;
+                return a.sign;
             else if (a.decimal[i] < b.decimal[i])
-                return -1;
+                return -a.sign;
         }
+
+        if (a.declen > b.declen)
+            return a.sign;
+        else if (a.declen < b.declen)
+            return -a.sign;
 
         return 0;
     }
 
     public MyBigFloat minus(MyBigFloat other) {
-        if (this.positive == -1) {
-            if (other.positive == 1)
-                return this.revert().plus(other).revert();
+        if (this.sign == -1) {
+            if (other.sign == 1)
+                return this.inverse().plus(other).inverse();
             else
-                return other.revert().minus(this.revert());
+                return other.inverse().minus(this.inverse());
         } else {
-            if (other.positive == -1)
-                return this.plus(other.revert());
+            if (other.sign == -1)
+                return this.plus(other.inverse());
         }
 
         if (MyBigFloat.compare(this, other) < 0)
-            return other.minus(this).revert();
+            return other.minus(this).inverse();
 
         int len1 = max(this.declen, other.declen);
-//        System.out.println("lendec: " + len1);
         int[] deci = new int[len1];
 
         int add = 0;
@@ -204,10 +226,8 @@ public class MyBigFloat {
         }
 
         int len2 = max(this.intlen, other.intlen);
-//        System.out.println("lenint: " + len2);
         int[] inte = new int[len2];
 
-//        System.out.println("add: " + add);
         for (int i = 0; i < len2; i++) {
             num = 10 - add + (this.intlen - i > 0 ? this.integer[this.intlen - i - 1] : 0) - (other.intlen - i > 0 ? other.integer[other.intlen - i - 1] : 0);
             add = num < 10 ? 1 : 0;
@@ -218,12 +238,12 @@ public class MyBigFloat {
     }
 
     public MyBigFloat multiply(MyBigFloat other) {
-        int len1 = this.intlen + this.declen;
-        int len2 = other.intlen + other.declen;
+        int len1 = this.intlen + other.intlen;
+        int len2 = this.declen + other.declen;
         int[] ans = new int[len1 + len2];
 
-        for (int i = len1 - 1; i >= 0; i--) {
-            for (int j = len2 - 1; j >= 0; j--) {
+        for (int i = this.intlen + this.declen - 1; i >= 0; i--) {
+            for (int j = other.intlen + other.declen - 1; j >= 0; j--) {
                 int num = i + j + 1;
                 ans[num] += (i < this.intlen ? this.integer[i] : this.decimal[i - this.intlen]) * (j < other.intlen ? other.integer[j] : other.decimal[j - other.intlen]);
                 if (num != 0) ans[num - 1] += ans[num] / 10;
@@ -231,8 +251,9 @@ public class MyBigFloat {
             }
         }
 
-        int pos = this.positive * other.positive;
-        if (this.toInt() == 0 || other.toInt() == 0)
+        int pos = this.sign * other.sign;
+        if (this.intlen == 1 && this.integer[0] == 0 && this.declen == 1 && this.decimal[0] == 0 ||
+                other.intlen == 1 && other.integer[0] == 0 && other.declen == 1 && other.decimal[0] == 0)
             pos = 1;
 
         return new MyBigFloat(Arrays.copyOfRange(ans, 0, len1), Arrays.copyOfRange(ans, len1, len1 + len2), len1, len2, pos);
@@ -245,60 +266,73 @@ public class MyBigFloat {
         }
 
         int[] i = new int[]{0};
-        int[] d = new int[precision];
+        int[] d;
 
         if (precision == 0) {
-            i[0] = 1;
+            i[0] = add;
             d = new int[]{0};
+            precision = 1;
         } else {
+            d = new int[precision];
             d[precision - 1] = add;
         }
 
         return (new MyBigFloat(Arrays.copyOf(this.integer, this.intlen), Arrays.copyOf(this.decimal, this.declen), this.intlen, precision, 1)).plus(new MyBigFloat(i, d, 1, precision, 1));
     }
 
-    public long toLong() {
-        long ans = 0;
+    public int toInt() {
+        if ((this.sign == 1 && MyBigFloat.compare(this, new MyBigFloat(Integer.MAX_VALUE)) == 1) ||
+                (this.sign == -1 && MyBigFloat.compare(this, new MyBigFloat(Integer.MIN_VALUE)) == -1))
+            throw new IllegalArgumentException("Number can't be converted to int");
+
+        int ans = 0;
 
         for (int i = 0; i < this.intlen; i++) {
             ans = ans * 10 + this.integer[i];
         }
 
-        return ans * this.positive;
-    }
-
-    public int toInt() {
-        return (int) this.toLong();
+        return ans * this.sign;
     }
 
     public float toFloat() {
-        float ans = 0;
+        if ((this.sign == 1 && MyBigFloat.compare(this, new MyBigFloat(Float.MAX_VALUE)) == 1) ||
+                (this.sign == -1 && MyBigFloat.compare(this, new MyBigFloat(Float.MAX_VALUE).inverse()) == -1))
+            throw new IllegalArgumentException("Number can't be converted to float");
 
-        for (int i = 0; i < this.declen; i++) {
-            ans = ans / 10 + this.decimal[i];
-        }
-
-        return this.toInt() + ans * this.positive;
+        return Float.parseFloat(this.toString());
     }
 
+    @Override
     public String toString() {
         StringBuilder str = new StringBuilder();
-        str.append(this.positive == 1 ? "" : "-");
 
-        for (int i = 0; i < this.intlen; i++) {
-            str.append(this.integer[i]);
-            System.out.print(this.integer[i]);
-        }
-
+        str.append(this.sign == 1 ? "" : "-");
+        for (int i = 0; i < this.intlen; i++) str.append(this.integer[i]);
         str.append(".");
-//        System.out.print(".");
+        for (int i = 0; i < this.declen; i++) str.append(this.decimal[i]);
 
-        for (int i = 0; i < this.declen; i++) {
-            str.append(this.decimal[i]);
-//            System.out.print(this.decimal[i]);
-        }
-
-//        System.out.print("\n");
         return str.toString();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        MyBigFloat that = (MyBigFloat) o;
+
+        return intlen == that.intlen &&
+                declen == that.declen &&
+                sign == that.sign &&
+                Arrays.equals(integer, that.integer) &&
+                Arrays.equals(decimal, that.decimal);
+    }
+
+    @Override
+    public int hashCode() {
+        int result = Objects.hash(intlen, declen, sign);
+        result = 31 * result + Arrays.hashCode(integer);
+        result = 31 * result + Arrays.hashCode(decimal);
+
+        return result;
     }
 }
